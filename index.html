@@ -443,8 +443,7 @@ var espMax = document.getElementById('espMax'), mixSel = document.getElementById
 function fillSelect(keep){
   var cur = keep != null ? keep : stSel.value;
   stSel.innerHTML = '<option value="">— Saisie manuelle —</option>' + stList.map(function(r,i){
-    var sec = stSection(r);
-    return '<option value="'+i+'">'+escapeHtml(r[0])+'  —  S '+fmt(sec.S)+' / s '+fmt(sec.s)+' cm²/m</option>';
+    return '<option value="'+i+'">'+escapeHtml(r[0])+'</option>';
   }).join('');
   if(cur !== '' && stList[cur]) stSel.value = cur;
 }
