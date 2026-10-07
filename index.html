@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculateur Section Acier</title>
+<style>
+:root{
+  --bg:#f3f4f6; --card:#ffffff; --ink:#111827; --mute:#6b7280; --line:#e5e7eb;
+  --key:#f3f4f6; --key-h:#e5e7eb; --op:#dbeafe; --op-ink:#1e40af;
+  --acc:#2563eb; --acc-ink:#ffffff; --ok:#047857; --ok-bg:#d1fae5; --err:#b91c1c;
+  --disp:#0f172a; --disp-ink:#f8fafc; --disp-mute:#94a3b8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b0f17; --card:#151b26; --ink:#e5e7eb; --mute:#9ca3af; --line:#263041;
+    --key:#1f2733; --key-h:#2a3443; --op:#1e3a8a; --op-ink:#dbeafe;
+    --acc:#3b82f6; --acc-ink:#ffffff; --ok:#34d399; --ok-bg:#064e3b; --err:#f87171;
+    --disp:#05080d; --disp-ink:#f8fafc; --disp-mute:#64748b;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b0f17; --card:#151b26; --ink:#e5e7eb; --mute:#9ca3af; --line:#263041;
+  --key:#1f2733; --key-h:#2a3443; --op:#1e3a8a; --op-ink:#dbeafe;
+  --acc:#3b82f6; --acc-ink:#ffffff; --ok:#34d399; --ok-bg:#064e3b; --err:#f87171;
+  --disp:#05080d; --disp-ink:#f8fafc; --disp-mute:#64748b;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+.wrap{max-width:460px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+h1{font-size:17px;margin:0;font-weight:650}
+.tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:transparent;color:var(--mute);padding:9px;border-radius:9px;font:inherit;font-weight:600;cursor:pointer}
+.tabs button.on{background:var(--acc);color:var(--acc-ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.hidden{display:none}
+.icon-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:5px 9px;cursor:pointer;font:inherit}
+
+/* Calculatrice */
+.display{background:var(--disp);color:var(--disp-ink);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.display input{width:100%;background:transparent;border:0;outline:0;color:var(--disp-ink);font:500 19px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:0}
+.display .res{text-align:right;font:700 30px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-top:6px;min-height:36px;word-break:break-all}
+.display .res small{font-size:16px;font-weight:500;color:var(--disp-mute)}
+.display .sub{text-align:right;color:var(--disp-mute);font-size:13px;min-height:18px}
+.display .err{color:#fca5a5}
+.keys{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.keys button{border:0;border-radius:10px;padding:13px 0;font:600 17px system-ui,sans-serif;background:var(--key);color:var(--ink);cursor:pointer;user-select:none}
+.keys button:hover{background:var(--key-h)}
+.keys button:active{transform:scale(.97)}
+.keys .d{background:var(--op);color:var(--op-ink);font-size:15px}
+.keys .op{background:var(--op);color:var(--op-ink)}
+.keys .eq{background:var(--acc);color:var(--acc-ink)}
+.keys .clr{color:var(--err)}
+.detail{margin-top:12px;font-size:13px}
+.detail table{width:100%;border-collapse:collapse}
+.detail td{padding:4px 2px;border-bottom:1px solid var(--line)}
+.detail td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.hist-title{display:flex;justify-content:space-between;align-items:center;margin:14px 0 4px;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.hist{list-style:none;margin:0;padding:0;font-size:14px}
+.hist li{display:flex;justify-content:space-between;gap:8px;padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.hist li:hover{background:var(--key)}
+.hist li span:last-child{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.hint{color:var(--mute);font-size:12px;margin-top:10px}
+
+/* ST */
+label{font-size:12px;color:var(--mute);display:block;margin-bottom:3px}
+select,input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.sec{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:12px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chips label{margin:0;display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;color:var(--ink);font-size:14px}
+.chips input{accent-color:var(--acc)}
+.chips label:has(input:checked){border-color:var(--acc);background:var(--op);color:var(--op-ink)}
+.out-dir{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
+.out-dir h3{margin:0 0 2px;font-size:14px}
+.out-dir .tgt{color:var(--mute);font-size:13px;margin-bottom:8px}
+.best{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.best b{font-size:20px;display:block;color:var(--ink)}
+.best span{font-size:13px}
+.alt{width:100%;border-collapse:collapse;font-size:13px}
+.alt th{text-align:left;color:var(--mute);font-weight:500;padding:3px 2px;border-bottom:1px solid var(--line)}
+.alt td{padding:5px 2px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.alt td:not(:first-child),.alt th:not(:first-child){text-align:right}
+details{margin-top:14px;font-size:13px}
+summary{cursor:pointer;color:var(--mute);font-weight:600}
+.sttable{width:100%;border-collapse:collapse;margin-top:8px}
+.sttable th{color:var(--mute);font-weight:500;text-align:left;font-size:11px;padding:2px}
+.sttable td{padding:2px}
+.sttable input{padding:5px 6px;font-size:13px;border-radius:6px}
+.sttable .x{border:0;background:none;color:var(--err);cursor:pointer;font-size:16px}
+.btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+textarea{width:100%;min-height:80px;margin-top:6px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:12px ui-monospace,monospace;padding:8px}
+.warn{color:var(--mute);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Section d'acier</h1>
+    <button class="icon-btn" id="themeBtn" title="Thème clair / sombre">◐</button>
+  </header>
+
+  <div class="tabs">
+    <button data-tab="calc" class="on">Calcul</button>
+    <button data-tab="st">Équivalence ST</button>
+  </div>
+
+  <!-- ================= CALCULATRICE ================= -->
+  <section id="tab-calc" class="card">
+    <div class="display">
+      <input id="expr" type="text" autocomplete="off" spellcheck="false" placeholder="6*Ø8 + 2*Ø12" inputmode="text">
+      <div class="res" id="res">0 <small>cm²</small></div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="keys" id="keys">
+      <button class="d" data-ins="Ø6">Ø6</button>
+      <button class="d" data-ins="Ø8">Ø8</button>
+      <button class="d" data-ins="Ø10">Ø10</button>
+      <button class="d" data-ins="Ø12">Ø12</button>
+      <button class="d" data-ins="Ø14">Ø14</button>
+
+      <button class="d" data-ins="Ø16">Ø16</button>
+      <button class="d" data-ins="Ø20">Ø20</button>
+      <button class="d" data-ins="Ø25">Ø25</button>
+      <button class="d" data-ins="Ø32">Ø32</button>
+      <button class="d" data-ins="Ø">Ø</button>
+
+      <button data-ins="7">7</button>
+      <button data-ins="8">8</button>
+      <button data-ins="9">9</button>
+      <button class="op" data-ins="(">(</button>
+      <button class="op" data-ins=")">)</button>
+
+      <button data-ins="4">4</button>
+      <button data-ins="5">5</button>
+      <button data-ins="6">6</button>
+      <button class="op" data-ins="*">×</button>
+      <button class="op" data-ins="/">÷</button>
+
+      <button data-ins="1">1</button>
+      <button data-ins="2">2</button>
+      <button data-ins="3">3</button>
+      <button class="op" data-ins=" + ">+</button>
+      <button class="op" data-ins=" - ">−</button>
+
+      <button class="clr" data-act="clear">C</button>
+      <button data-ins="0">0</button>
+      <button data-ins=".">.</button>
+      <button data-act="back">⌫</button>
+      <button class="eq" data-act="eq">=</button>
+    </div>
+
+    <div class="detail" id="detail"></div>
+
+    <div class="hist-title"><span>Historique</span><button class="icon-btn" id="histClear" style="font-size:11px;padding:2px 7px">Effacer</button></div>
+    <ul class="hist" id="hist"></ul>
+
+    <div class="hint">Syntaxe : <code>6*Ø8 + 2*Ø12</code>, <code>6Ø8+2Ø12</code>, <code>6 HA8 + 2 HA12</code>, <code>4x(Ø10+Ø12)</code>. Préfixes acceptés : Ø, ø, HA, T, D. La virgule vaut un point décimal. Entrée = ajouter à l'historique.</div>
+  </section>
+
+  <!-- ================= ÉQUIVALENCE ST ================= -->
+  <section id="tab-st" class="card hidden">
+    <label for="stSel">Treillis soudé</label>
+    <select id="stSel"></select>
+
+    <div class="sec">Sens porteur (fils longitudinaux)</div>
+    <div class="row">
+      <div><label for="eL">Espacement E (mm)</label><input id="eL" type="number" min="1" step="1"></div>
+      <div><label for="dL">Diamètre D (mm)</label><input id="dL" type="number" min="1" step="0.5"></div>
+    </div>
+    <div class="sec">Sens de répartition (fils transversaux)</div>
+    <div class="row">
+      <div><label for="eT">Espacement e (mm)</label><input id="eT" type="number" min="1" step="1"></div>
+      <div><label for="dT">Diamètre d (mm)</label><input id="dT" type="number" min="1" step="0.5"></div>
+    </div>
+
+    <div class="sec">Diamètres HA autorisés</div>
+    <div class="chips" id="diamChips"></div>
+
+    <div class="row">
+      <div><label for="espMax">Espacement max (cm, optionnel)</label><input id="espMax" type="number" min="1" step="1" placeholder="—"></div>
+      <div><label for="mix">Mélange de 2 diamètres</label>
+        <select id="mix"><option value="1">Autoriser</option><option value="0">Non</option></select></div>
+    </div>
+
+    <div id="stOut"></div>
+
+    <details id="stDetails">
+      <summary>Tableau de référence des ST (modifiable)</summary>
+      <div class="warn">Valeurs pré-remplies indicatives (catalogue ADETS courant) — vérifiez-les avec votre propre tableau. Les modifications sont enregistrées dans ce navigateur.</div>
+      <table class="sttable">
+        <thead><tr><th>Nom</th><th>E</th><th>D</th><th>e</th><th>d</th><th></th></tr></thead>
+        <tbody id="stBody"></tbody>
+      </table>
+      <div class="btns">
+        <button class="icon-btn" id="stAdd">+ Ligne</button>
+        <button class="icon-btn" id="stReset">Valeurs par défaut</button>
+        <button class="icon-btn" id="stImportToggle">Coller un tableau</button>
+      </div>
+      <div id="stImportBox" class="hidden">
+        <textarea id="stImport" placeholder="Une ligne par ST : Nom ; E ; D ; e ; d&#10;ST 25 ; 150 ; 7 ; 300 ; 7&#10;(séparateurs acceptés : ; tabulation)"></textarea>
+        <div class="btns"><button class="icon-btn" id="stImportGo">Remplacer le tableau</button></div>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+var PI = Math.PI;
+var areaBar = function(d){ return PI*d*d/400; };          // cm² pour Ø en mm
+var fmt = function(x, n){ n = n==null?2:n; return (Math.round(x*Math.pow(10,n))/Math.pow(10,n)).toFixed(n).replace('.', ','); };
+var store = {
+  get: function(k, def){ try{ var v = localStorage.getItem(k); return v==null?def:JSON.parse(v); }catch(e){ return def; } },
+  set: function(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- Thème ---------- */
+var root = document.documentElement;
+var theme = store.get('ssc-theme', null);
+if(theme) root.setAttribute('data-theme', theme);
+document.getElementById('themeBtn').onclick = function(){
+  var dark = root.getAttribute('data-theme') ? root.getAttribute('data-theme')==='dark'
+           : matchMedia('(prefers-color-scheme: dark)').matches;
+  theme = dark ? 'light' : 'dark';
+  root.setAttribute('data-theme', theme); store.set('ssc-theme', theme);
+};
+
+/* ---------- Onglets ---------- */
+var tabs = document.querySelectorAll('.tabs button');
+function showTab(t){
+  tabs.forEach(function(b){ b.classList.toggle('on', b.dataset.tab===t); });
+  document.getElementById('tab-calc').classList.toggle('hidden', t!=='calc');
+  document.getElementById('tab-st').classList.toggle('hidden', t!=='st');
+  store.set('ssc-tab', t);
+}
+tabs.forEach(function(b){ b.onclick = function(){ showTab(b.dataset.tab); }; });
+showTab(store.get('ssc-tab','calc'));
+
+/* ================= PARSEUR ================= */
+// Tokens : num, bar (diamètre), op
+function tokenize(s){
+  var t = [], i = 0, m;
+  s = s.replace(/,/g,'.').replace(/[×xX]/g,'*').replace(/÷/g,'/').replace(/−/g,'-');
+  while(i < s.length){
+    var c = s[i];
+    if(/\s/.test(c)){ i++; continue; }
+    var rest = s.slice(i);
+    if((m = rest.match(/^(?:Ø|ø|Φ|φ|HA|ha|Ha|T|t|D|d)\s*(\d+(?:\.\d+)?)/))){
+      t.push({k:'bar', v:parseFloat(m[1])}); i += m[0].length; continue;
+    }
+    if((m = rest.match(/^\d+(?:\.\d+)?|^\.\d+/))){
+      t.push({k:'num', v:parseFloat(m[0])}); i += m[0].length; continue;
+    }
+    if('+-*/()'.indexOf(c) >= 0){ t.push({k:'op', v:c}); i++; continue; }
+    if(/^(?:Ø|ø|Φ|φ|HA|T|D)/i.test(rest)) throw new Error('Diamètre manquant');
+    throw new Error('Caractère inattendu « '+c+' »');
+  }
+  // multiplication implicite : 6Ø8, 2(…), )(, )Ø8
+  var out = [];
+  for(var j=0;j<t.length;j++){
+    var a = out[out.length-1], b = t[j];
+    var aEnd = a && (a.k==='num' || a.k==='bar' || (a.k==='op' && a.v===')'));
+    var bStart = b.k==='bar' || (b.k==='op' && b.v==='(') || (b.k==='num' && a && a.k!=='num');
+    if(aEnd && bStart) out.push({k:'op', v:'*'});
+    out.push(b);
+  }
+  return out;
+}
+function evaluate(tokens){
+  var p = 0, hasBar = false;
+  function peek(){ return tokens[p]; }
+  function isOp(v){ var x = peek(); return x && x.k==='op' && x.v===v; }
+  function expr(){ var v = term(); while(isOp('+')||isOp('-')){ var o = tokens[p++].v, r = term(); v = o==='+'?v+r:v-r; } return v; }
+  function term(){ var v = unary(); while(isOp('*')||isOp('/')){ var o = tokens[p++].v, r = unary(); if(o==='/' && r===0) throw new Error('Division par zéro'); v = o==='*'?v*r:v/r; } return v; }
+  function unary(){ if(isOp('-')){ p++; return -unary(); } if(isOp('+')){ p++; return unary(); } return prim(); }
+  function prim(){
+    var x = peek();
+    if(!x) throw new Error('Expression incomplète');
+    if(x.k==='num'){ p++; return x.v; }
+    if(x.k==='bar'){ p++; hasBar = true; return areaBar(x.v); }
+    if(isOp('(')){ p++; var v = expr(); if(!isOp(')')) throw new Error('Parenthèse manquante'); p++; return v; }
+    throw new Error('Opérateur inattendu « '+x.v+' »');
+  }
+  var v = expr();
+  if(p < tokens.length) throw new Error('Expression mal formée');
+  return {v:v, hasBar:hasBar};
+}
+// Décompose en termes de premier niveau (pour le détail)
+function splitTerms(tokens){
+  var terms = [], cur = [], depth = 0, sign = 1;
+  tokens.forEach(function(t){
+    if(t.k==='op' && t.v==='(') depth++;
+    if(t.k==='op' && t.v===')') depth--;
+    if(depth===0 && t.k==='op' && (t.v==='+'||t.v==='-') && cur.length){ terms.push({s:sign,t:cur}); cur=[]; sign = t.v==='+'?1:-1; return; }
+    if(depth===0 && t.k==='op' && (t.v==='+'||t.v==='-') && !cur.length){ sign *= t.v==='-'?-1:1; return; }
+    cur.push(t);
+  });
+  if(cur.length) terms.push({s:sign,t:cur});
+  return terms;
+}
+function tokText(ts){
+  return ts.map(function(t){ return t.k==='bar' ? 'Ø'+String(t.v).replace('.',',') : t.k==='num' ? String(t.v).replace('.',',') : (t.v==='*'?'×':t.v); })
+           .join('').replace(/(\d)×Ø/g,'$1 Ø');
+}
+
+/* ================= CALCULATRICE UI ================= */
+var exprEl = document.getElementById('expr'), resEl = document.getElementById('res'),
+    subEl = document.getElementById('sub'), detEl = document.getElementById('detail'),
+    histEl = document.getElementById('hist');
+var hist = store.get('ssc-hist', []);
+var last = null;
+
+function compute(){
+  var s = exprEl.value.trim();
+  store.set('ssc-expr', exprEl.value);
+  last = null; detEl.innerHTML = '';
+  if(!s){ resEl.innerHTML = '0 <small>cm²</small>'; subEl.textContent=''; return; }
+  try{
+    var tk = tokenize(s), r = evaluate(tk);
+    last = {e:s, v:r.v, bar:r.hasBar};
+    if(r.hasBar){
+      resEl.innerHTML = fmt(r.v) + ' <small>cm²</small>';
+      subEl.textContent = '= ' + fmt(r.v*100,1) + ' mm²  ·  ' + fmt(r.v*0.785,3) + ' kg/m';
+      var terms = splitTerms(tk);
+      if(terms.length > 1){
+        var rows = terms.map(function(x){
+          var v = x.s*evaluate(x.t).v;
+          return '<tr><td>'+(x.s<0?'− ':'')+tokText(x.t)+'</td><td>'+fmt(v)+' cm²</td></tr>';
+        });
+        detEl.innerHTML = '<table>'+rows.join('')+'</table>';
+      }
+    } else {
+      resEl.innerHTML = fmt(r.v, 4).replace(/,?0+$/,'');
+      subEl.textContent = 'Sans diamètre : calcul numérique';
+    }
+  }catch(err){
+    resEl.innerHTML = '<span class="err" style="font-size:16px">'+err.message+'</span>';
+    subEl.textContent = '';
+  }
+}
+function renderHist(){
+  histEl.innerHTML = '';
+  hist.forEach(function(h){
+    var li = document.createElement('li');
+    var a = document.createElement('span'); a.textContent = h.e;
+    var b = document.createElement('span'); b.textContent = h.bar ? fmt(h.v)+' cm²' : fmt(h.v,4).replace(/,?0+$/,'');
+    li.appendChild(a); li.appendChild(b);
+    li.onclick = function(){ exprEl.value = h.e; compute(); exprEl.focus(); };
+    histEl.appendChild(li);
+  });
+}
+function commit(){
+  compute();
+  if(!last) return;
+  if(!hist.length || hist[0].e !== last.e){ hist.unshift(last); hist = hist.slice(0,30); store.set('ssc-hist', hist); renderHist(); }
+}
+function insert(txt){
+  var a = exprEl.selectionStart, b = exprEl.selectionEnd, v = exprEl.value;
+  if(a == null){ a = b = v.length; }
+  // Après un diamètre ou un chiffre, un bouton Ø.. ajoute un « + » si besoin
+  if(/^Ø\d/.test(txt) && /Ø\d+\s*$/.test(v.slice(0,a))) txt = ' + ' + txt;
+  exprEl.value = v.slice(0,a) + txt + v.slice(b);
+  var pos = a + txt.length;
+  exprEl.setSelectionRange(pos,pos);
+  compute();
+}
+document.getElementById('keys').addEventListener('click', function(e){
+  var btn = e.target.closest('button'); if(!btn) return;
+  if(btn.dataset.ins != null) insert(btn.dataset.ins);
+  else if(btn.dataset.act==='clear'){ exprEl.value=''; compute(); }
+  else if(btn.dataset.act==='back'){
+    var a = exprEl.selectionStart, b = exprEl.selectionEnd, v = exprEl.value;
+    if(a!==b){ exprEl.value = v.slice(0,a)+v.slice(b); exprEl.setSelectionRange(a,a); }
+    else if(a>0){ var cut = /\s$/.test(v.slice(0,a)) ? v.slice(0,a).replace(/\s*[+\-]?\s*$/,'') : v.slice(0,a-1);
+      if(cut.length === a) cut = v.slice(0,a-1);
+      exprEl.value = cut + v.slice(a); exprEl.setSelectionRange(cut.length,cut.length); }
+    compute();
+  }
+  else if(btn.dataset.act==='eq') commit();
+  if(matchMedia('(pointer:fine)').matches) exprEl.focus();
+});
+exprEl.addEventListener('input', compute);
+exprEl.addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ e.preventDefault(); commit(); }
+  if(e.key==='Escape'){ exprEl.value=''; compute(); }
+});
+document.getElementById('histClear').onclick = function(){ hist=[]; store.set('ssc-hist',hist); renderHist(); };
+exprEl.value = store.get('ssc-expr', '6*Ø8 + 2*Ø12');
+compute(); renderHist();
+
+/* ================= ÉQUIVALENCE ST ================= */
+// [nom, E porteur (mm), D porteur (mm), e répartition (mm), d répartition (mm)]
+var ST_DEFAULT = [
+  ['ST 10',   200, 5.5, 300, 5.5],
+  ['ST 15 C', 200, 6,   200, 6  ],
+  ['ST 20',   150, 6,   300, 7  ],
+  ['ST 25',   150, 7,   300, 7  ],
+  ['ST 25 C', 150, 7,   150, 7  ],
+  ['ST 30',   100, 6,   300, 7  ],
+  ['ST 35',   100, 7,   300, 7  ],
+  ['ST 40 C', 100, 7,   100, 7  ],
+  ['ST 50',   100, 8,   300, 8  ],
+  ['ST 50 C', 100, 8,   100, 8  ],
+  ['ST 60',   100, 9,   300, 8  ],
+  ['ST 65 C', 100, 9,   100, 9  ]
+];
+var stList = store.get('ssc-st', null) || ST_DEFAULT.map(function(r){ return r.slice(); });
+var DIAMS = [5, 6, 8, 10, 12, 14, 16, 20];
+var allowed = store.get('ssc-diams', [6, 8]);
+
+var stSel = document.getElementById('stSel'), stOut = document.getElementById('stOut');
+var fld = { eL:document.getElementById('eL'), dL:document.getElementById('dL'),
+            eT:document.getElementById('eT'), dT:document.getElementById('dT') };
+var espMax = document.getElementById('espMax'), mixSel = document.getElementById('mix');
+
+function fillSelect(keep){
+  var cur = keep != null ? keep : stSel.value;
+  stSel.innerHTML = '<option value="">— Saisie manuelle —</option>' + stList.map(function(r,i){
+    return '<option value="'+i+'">'+escapeHtml(r[0])+'  (E'+r[1]+' Ø'+r[2]+' / e'+r[3]+' Ø'+r[4]+')</option>';
+  }).join('');
+  if(cur !== '' && stList[cur]) stSel.value = cur;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function loadST(){
+  var r = stList[stSel.value];
+  if(r){ fld.eL.value=r[1]; fld.dL.value=r[2]; fld.eT.value=r[3]; fld.dT.value=r[4]; }
+  computeST();
+}
+function chips(){
+  var box = document.getElementById('diamChips');
+  box.innerHTML = DIAMS.map(function(d){
+    return '<label><input type="checkbox" value="'+d+'"'+(allowed.indexOf(d)>=0?' checked':'')+'> HA'+d+'</label>';
+  }).join('');
+  box.onchange = function(){
+    allowed = Array.prototype.map.call(box.querySelectorAll('input:checked'), function(i){ return +i.value; });
+    store.set('ssc-diams', allowed); computeST();
+  };
+}
+
+// Solutions pour 1 m : n barres de Ø, ou n1 Ø1 + n2 Ø2
+function solve(target, diams, minBars, allowMix){
+  var sols = [];
+  diams.forEach(function(d){
+    var a = areaBar(d), n = Math.max(Math.ceil(target/a - 1e-9), minBars, 1);
+    sols.push({parts:[[n,d]], n:n, A:n*a});
+  });
+  if(allowMix && diams.length > 1){
+    for(var i=0;i<diams.length;i++) for(var j=i+1;j<diams.length;j++){
+      var d1=diams[i], d2=diams[j], a1=areaBar(d1), a2=areaBar(d2);
+      // Mélange alterné uniquement (écart d'au plus 1 barre entre les deux diamètres)
+      for(var n1=1;n1<=40;n1++) for(var k=-1;k<=1;k++){
+        var n2 = n1+k; if(n2 < 1 || n1+n2 < minBars) continue;
+        var A = n1*a1+n2*a2;
+        if(A >= target - 1e-9) sols.push({parts:[[n1,d1],[n2,d2]], n:n1+n2, A:A, mix:true});
+      }
+    }
+  }
+  // Tri : moins de surplus, puis moins de barres
+  sols.sort(function(x,y){ var dx = x.A-y.A; return Math.abs(dx) > 0.005 ? dx : x.n-y.n; });
+  // Une solution mixte n'est retenue que si elle bat toutes les solutions simples
+  var bestSingle = sols.filter(function(s){ return !s.mix; })[0];
+  var seen = {};
+  return sols.filter(function(s){
+    if(!s.mix) return true;
+    var key = s.parts[0][1]+'-'+s.parts[1][1];
+    if(seen[key] || s.A >= bestSingle.A - 0.005) return false;
+    return (seen[key] = true);
+  }).slice(0, 5);
+}
+function partsText(p){ return p.map(function(x){ return x[0]+' HA'+x[1]; }).join(' + '); }
+
+function dirBlock(title, E, D, diams, minBars, allowMix){
+  if(!(E>0 && D>0)) return '';
+  var target = areaBar(D) * 1000 / E;
+  var h = '<div class="out-dir"><h3>'+title+'</h3><div class="tgt">ST : Ø'+String(D).replace('.',',')+' tous les '+E+' mm → <b>'+fmt(target)+' cm²/m</b></div>';
+  if(!diams.length) return h + '<div class="warn">Sélectionnez au moins un diamètre.</div></div>';
+  var sols = solve(target, diams, minBars, allowMix), b = sols[0];
+  h += '<div class="best"><b>'+partsText(b.parts)+' / m</b><span>'+fmt(b.A)+' cm²/m (+'+fmt((b.A/target-1)*100,0)+' %) · espacement ≈ '+fmt(100/b.n,1)+' cm'+(b.mix?' · en alternant les diamètres':'')+'</span></div>';
+  if(sols.length > 1){
+    h += '<table class="alt"><tr><th>Autres choix / m</th><th>cm²/m</th><th>Surplus</th><th>Esp.</th></tr>';
+    sols.slice(1).forEach(function(s){
+      h += '<tr><td>'+partsText(s.parts)+'</td><td>'+fmt(s.A)+'</td><td>+'+fmt((s.A/target-1)*100,0)+' %</td><td>'+fmt(100/s.n,1)+' cm</td></tr>';
+    });
+    h += '</table>';
+  }
+  return h + '</div>';
+}
+function computeST(){
+  var em = parseFloat(espMax.value), minBars = em > 0 ? Math.ceil(100/em - 1e-9) : 1;
+  var diams = allowed.slice().sort(function(a,b){ return a-b; }), mix = mixSel.value==='1';
+  var html = dirBlock('Sens porteur', +fld.eL.value, +fld.dL.value, diams, minBars, mix)
+           + dirBlock('Sens de répartition', +fld.eT.value, +fld.dT.value, diams, minBars, mix);
+  stOut.innerHTML = html || '<div class="warn">Choisissez un ST ou saisissez E et D.</div>';
+  store.set('ssc-stform', {sel:stSel.value, eL:fld.eL.value, dL:fld.dL.value, eT:fld.eT.value, dT:fld.dT.value, em:espMax.value, mix:mixSel.value});
+}
+
+/* Tableau ST éditable */
+var stBody = document.getElementById('stBody');
+function renderSTTable(){
+  stBody.innerHTML = '';
+  stList.forEach(function(r, i){
+    var tr = document.createElement('tr');
+    r.forEach(function(v, k){
+      var td = document.createElement('td'), inp = document.createElement('input');
+      inp.type = k===0 ? 'text' : 'number'; inp.value = v; if(k>0) inp.step = 'any';
+      inp.oninput = function(){ stList[i][k] = k===0 ? inp.value : parseFloat(inp.value)||0; saveST(); };
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    var td = document.createElement('td'), x = document.createElement('button');
+    x.className = 'x'; x.textContent = '×'; x.title = 'Supprimer';
+    x.onclick = function(){ stList.splice(i,1); saveST(); renderSTTable(); };
+    td.appendChild(x); tr.appendChild(td); stBody.appendChild(tr);
+  });
+}
+function saveST(){ store.set('ssc-st', stList); fillSelect(); if(stList[stSel.value]) loadST(); }
+document.getElementById('stAdd').onclick = function(){ stList.push(['ST ?',150,7,300,7]); saveST(); renderSTTable(); };
+document.getElementById('stReset').onclick = function(){
+  if(!confirm('Remplacer le tableau par les valeurs par défaut ?')) return;
+  stList = ST_DEFAULT.map(function(r){ return r.slice(); }); saveST(); renderSTTable();
+};
+document.getElementById('stImportToggle').onclick = function(){ document.getElementById('stImportBox').classList.toggle('hidden'); };
+document.getElementById('stImportGo').onclick = function(){
+  var rows = document.getElementById('stImport').value.split(/\r?\n/).map(function(l){
+    var c = l.split(/[;\t|]/).map(function(s){ return s.trim(); });
+    if(c.length < 3) return null;
+    var n = c.slice(1).map(function(s){ return parseFloat(s.replace(',', '.')); });
+    if(!(n[0]>0 && n[1]>0)) return null;
+    return [c[0], n[0], n[1], n[2]>0?n[2]:0, n[3]>0?n[3]:0];
+  }).filter(Boolean);
+  if(!rows.length){ alert('Aucune ligne valide (format : Nom ; E ; D ; e ; d).'); return; }
+  stList = rows; saveST(); renderSTTable(); document.getElementById('stImportBox').classList.add('hidden');
+};
+
+stSel.onchange = loadST;
+[fld.eL, fld.dL, fld.eT, fld.dT].forEach(function(i){ i.oninput = function(){ stSel.value=''; computeST(); }; });
+espMax.oninput = computeST; mixSel.onchange = computeST;
+
+chips(); fillSelect(); renderSTTable();
+var f = store.get('ssc-stform', null);
+if(f){
+  stSel.value = stList[f.sel] ? f.sel : '';
+  fld.eL.value=f.eL; fld.dL.value=f.dL; fld.eT.value=f.eT; fld.dT.value=f.dT; espMax.value=f.em||''; mixSel.value=f.mix||'1';
+  computeST();
+} else { stSel.value = '6'; loadST(); }
+})();
+</script>
+</body>
+</html>
