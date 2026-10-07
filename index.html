@@ -74,6 +74,11 @@ select,input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1p
 .chips label{margin:0;display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;color:var(--ink);font-size:14px}
 .chips input{accent-color:var(--acc)}
 .chips label:has(input:checked){border-color:var(--acc);background:var(--op);color:var(--op-ink)}
+.stinfo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 2px}
+.stinfo div{background:var(--op);color:var(--op-ink);border-radius:10px;padding:8px 10px}
+.stinfo small{display:block;font-size:11px;opacity:.85}
+.stinfo b{font-size:20px;font-variant-numeric:tabular-nums}
+.stinfo .tot{grid-column:1/-1;background:transparent;color:var(--mute);padding:0 2px;font-size:12px}
 .out-dir{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
 .out-dir h3{margin:0 0 2px;font-size:14px}
 .out-dir .tgt{color:var(--mute);font-size:13px;margin-bottom:8px}
@@ -158,13 +163,14 @@ textarea{width:100%;min-height:80px;margin-top:6px;border:1px solid var(--line);
     <div class="hist-title"><span>Historique</span><button class="icon-btn" id="histClear" style="font-size:11px;padding:2px 7px">Effacer</button></div>
     <ul class="hist" id="hist"></ul>
 
-    <div class="hint">Syntaxe : <code>6*Ø8 + 2*Ø12</code>, <code>6Ø8+2Ø12</code>, <code>6 HA8 + 2 HA12</code>, <code>4x(Ø10+Ø12)</code>. Préfixes acceptés : Ø, ø, HA, T, D. La virgule vaut un point décimal. Entrée = ajouter à l'historique.</div>
+    <div class="hint">Syntaxe : <code>6*Ø8 + 2*Ø12</code>, <code>6Ø8+2Ø12</code>, <code>6 HA8 + 2 HA12</code>, <code>4x(Ø10+Ø12)</code>, <code>ST 35</code> (section porteuse S en cm²/m, s affiché dessous), <code>ST25C</code>, <code>PAF 10</code>. Préfixes acceptés : Ø, ø, HA, T, D. La virgule vaut un point décimal. Entrée = ajouter à l'historique.</div>
   </section>
 
   <!-- ================= ÉQUIVALENCE ST ================= -->
   <section id="tab-st" class="card hidden">
     <label for="stSel">Treillis soudé</label>
     <select id="stSel"></select>
+    <div class="stinfo" id="stInfo"></div>
 
     <div class="sec">Sens porteur (fils longitudinaux)</div>
     <div class="row">
@@ -190,7 +196,7 @@ textarea{width:100%;min-height:80px;margin-top:6px;border:1px solid var(--line);
 
     <details id="stDetails">
       <summary>Tableau de référence des ST (modifiable)</summary>
-      <div class="warn">Valeurs pré-remplies indicatives (catalogue ADETS courant) — vérifiez-les avec votre propre tableau. Les modifications sont enregistrées dans ce navigateur.</div>
+      <div class="warn">Valeurs du tableau ADETS « Produits standardisés sur stock ». Les modifications sont enregistrées dans ce navigateur.</div>
       <table class="sttable">
         <thead><tr><th>Nom</th><th>E</th><th>D</th><th>e</th><th>d</th><th></th></tr></thead>
         <tbody id="stBody"></tbody>
@@ -213,7 +219,7 @@ textarea{width:100%;min-height:80px;margin-top:6px;border:1px solid var(--line);
 "use strict";
 var PI = Math.PI;
 var areaBar = function(d){ return PI*d*d/400; };          // cm² pour Ø en mm
-var fmt = function(x, n){ n = n==null?2:n; return (Math.round(x*Math.pow(10,n))/Math.pow(10,n)).toFixed(n).replace('.', ','); };
+var fmt = function(x, n){ n = n==null?2:n; return (Math.round(x*Math.pow(10,n)*(1+1e-12))/Math.pow(10,n)).toFixed(n).replace('.', ','); };
 var store = {
   get: function(k, def){ try{ var v = localStorage.getItem(k); return v==null?def:JSON.parse(v); }catch(e){ return def; } },
   set: function(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -250,6 +256,11 @@ function tokenize(s){
     var c = s[i];
     if(/\s/.test(c)){ i++; continue; }
     var rest = s.slice(i);
+    if((m = rest.match(/^(ST|PAF)\s*(\d+)?\s*(CS|C|R|V)?(?![A-Za-z])/i)) && (m[2] || m[3])){
+      var st = findST(m[0]);
+      if(!st) throw new Error('« '+m[0].trim()+' » absent du tableau ST');
+      t.push({k:'st', v:st}); i += m[0].length; continue;
+    }
     if((m = rest.match(/^(?:Ø|ø|Φ|φ|HA|ha|Ha|T|t|D|d)\s*(\d+(?:\.\d+)?)/))){
       t.push({k:'bar', v:parseFloat(m[1])}); i += m[0].length; continue;
     }
@@ -264,15 +275,15 @@ function tokenize(s){
   var out = [];
   for(var j=0;j<t.length;j++){
     var a = out[out.length-1], b = t[j];
-    var aEnd = a && (a.k==='num' || a.k==='bar' || (a.k==='op' && a.v===')'));
-    var bStart = b.k==='bar' || (b.k==='op' && b.v==='(') || (b.k==='num' && a && a.k!=='num');
+    var aEnd = a && (a.k==='num' || a.k==='bar' || a.k==='st' || (a.k==='op' && a.v===')'));
+    var bStart = b.k==='bar' || b.k==='st' || (b.k==='op' && b.v==='(') || (b.k==='num' && a && a.k!=='num');
     if(aEnd && bStart) out.push({k:'op', v:'*'});
     out.push(b);
   }
   return out;
 }
 function evaluate(tokens){
-  var p = 0, hasBar = false;
+  var p = 0, hasBar = false, sts = [];
   function peek(){ return tokens[p]; }
   function isOp(v){ var x = peek(); return x && x.k==='op' && x.v===v; }
   function expr(){ var v = term(); while(isOp('+')||isOp('-')){ var o = tokens[p++].v, r = term(); v = o==='+'?v+r:v-r; } return v; }
@@ -283,12 +294,13 @@ function evaluate(tokens){
     if(!x) throw new Error('Expression incomplète');
     if(x.k==='num'){ p++; return x.v; }
     if(x.k==='bar'){ p++; hasBar = true; return areaBar(x.v); }
+    if(x.k==='st'){ p++; if(sts.indexOf(x.v)<0) sts.push(x.v); return stSection(x.v).S; }
     if(isOp('(')){ p++; var v = expr(); if(!isOp(')')) throw new Error('Parenthèse manquante'); p++; return v; }
     throw new Error('Opérateur inattendu « '+x.v+' »');
   }
   var v = expr();
   if(p < tokens.length) throw new Error('Expression mal formée');
-  return {v:v, hasBar:hasBar};
+  return {v:v, hasBar:hasBar, sts:sts};
 }
 // Décompose en termes de premier niveau (pour le détail)
 function splitTerms(tokens){
@@ -304,7 +316,7 @@ function splitTerms(tokens){
   return terms;
 }
 function tokText(ts){
-  return ts.map(function(t){ return t.k==='bar' ? 'Ø'+String(t.v).replace('.',',') : t.k==='num' ? String(t.v).replace('.',',') : (t.v==='*'?'×':t.v); })
+  return ts.map(function(t){ return t.k==='st' ? t.v[0]+' ' : t.k==='bar' ? 'Ø'+String(t.v).replace('.',',') : t.k==='num' ? String(t.v).replace('.',',') : (t.v==='*'?'×':t.v); })
            .join('').replace(/(\d)×Ø/g,'$1 Ø');
 }
 
@@ -322,15 +334,20 @@ function compute(){
   if(!s){ resEl.innerHTML = '0 <small>cm²</small>'; subEl.textContent=''; return; }
   try{
     var tk = tokenize(s), r = evaluate(tk);
-    last = {e:s, v:r.v, bar:r.hasBar};
-    if(r.hasBar){
+    var stOnly = r.sts.length && !r.hasBar;
+    last = {e:s, v:r.v, bar:r.hasBar || r.sts.length>0, unit: stOnly ? 'cm²/m' : 'cm²'};
+    if(stOnly){
+      resEl.innerHTML = fmt(r.v) + ' <small>cm²/m</small>';
+      subEl.textContent = r.sts.map(function(st){ var x = stSection(st);
+        return st[0]+' : S '+fmt(x.S)+' / s '+fmt(x.s)+' cm²/m (Ø'+String(st[2]).replace('.',',')+'·'+st[1]+' / Ø'+String(st[4]).replace('.',',')+'·'+st[3]+')'; }).join('  ·  ');
+    } else if(r.hasBar || r.sts.length){
       resEl.innerHTML = fmt(r.v) + ' <small>cm²</small>';
       subEl.textContent = '= ' + fmt(r.v*100,1) + ' mm²  ·  ' + fmt(r.v*0.785,3) + ' kg/m';
       var terms = splitTerms(tk);
       if(terms.length > 1){
         var rows = terms.map(function(x){
           var v = x.s*evaluate(x.t).v;
-          return '<tr><td>'+(x.s<0?'− ':'')+tokText(x.t)+'</td><td>'+fmt(v)+' cm²</td></tr>';
+          return '<tr><td>'+(x.s<0?'− ':'')+tokText(x.t)+'</td><td>'+fmt(v)+' '+last.unit+'</td></tr>';
         });
         detEl.innerHTML = '<table>'+rows.join('')+'</table>';
       }
@@ -348,7 +365,7 @@ function renderHist(){
   hist.forEach(function(h){
     var li = document.createElement('li');
     var a = document.createElement('span'); a.textContent = h.e;
-    var b = document.createElement('span'); b.textContent = h.bar ? fmt(h.v)+' cm²' : fmt(h.v,4).replace(/,?0+$/,'');
+    var b = document.createElement('span'); b.textContent = h.bar ? fmt(h.v)+' '+(h.unit||'cm²') : fmt(h.v,4).replace(/,?0+$/,'');
     li.appendChild(a); li.appendChild(b);
     li.onclick = function(){ exprEl.value = h.e; compute(); exprEl.focus(); };
     histEl.appendChild(li);
@@ -396,20 +413,25 @@ compute(); renderHist();
 /* ================= ÉQUIVALENCE ST ================= */
 // [nom, E porteur (mm), D porteur (mm), e répartition (mm), d répartition (mm)]
 var ST_DEFAULT = [
-  ['ST 10',   200, 5.5, 300, 5.5],
-  ['ST 15 C', 200, 6,   200, 6  ],
+  // Treillis soudés de structure (NF A 35-080-2, B500A)
   ['ST 20',   150, 6,   300, 7  ],
   ['ST 25',   150, 7,   300, 7  ],
-  ['ST 25 C', 150, 7,   150, 7  ],
-  ['ST 30',   100, 6,   300, 7  ],
   ['ST 35',   100, 7,   300, 7  ],
-  ['ST 40 C', 100, 7,   100, 7  ],
   ['ST 50',   100, 8,   300, 8  ],
+  ['ST 60',   100, 9,   250, 9  ],
+  ['ST 15 C', 200, 6,   200, 6  ],
+  ['ST 25 C', 150, 7,   150, 7  ],
+  ['ST 25 CS',150, 7,   150, 7  ],
+  ['ST 40 C', 100, 7,   100, 7  ],
   ['ST 50 C', 100, 8,   100, 8  ],
-  ['ST 60',   100, 9,   300, 8  ],
-  ['ST 65 C', 100, 9,   100, 9  ]
+  ['ST 65 C', 100, 9,   100, 9  ],
+  // Treillis soudés de surface
+  ['PAF R',   200, 4.5, 300, 4.5],
+  ['PAF C',   200, 4.5, 200, 4.5],
+  ['PAF V',   200, 4.5, 160, 4.5],
+  ['PAF 10',  200, 5.5, 200, 5.5]
 ];
-var stList = store.get('ssc-st', null) || ST_DEFAULT.map(function(r){ return r.slice(); });
+var stList = store.get('ssc-st-adets', null) || ST_DEFAULT.map(function(r){ return r.slice(); });
 var DIAMS = [5, 6, 8, 10, 12, 14, 16, 20];
 var allowed = store.get('ssc-diams', [6, 8]);
 
@@ -421,10 +443,18 @@ var espMax = document.getElementById('espMax'), mixSel = document.getElementById
 function fillSelect(keep){
   var cur = keep != null ? keep : stSel.value;
   stSel.innerHTML = '<option value="">— Saisie manuelle —</option>' + stList.map(function(r,i){
-    return '<option value="'+i+'">'+escapeHtml(r[0])+'  (E'+r[1]+' Ø'+r[2]+' / e'+r[3]+' Ø'+r[4]+')</option>';
+    var sec = stSection(r);
+    return '<option value="'+i+'">'+escapeHtml(r[0])+'  —  S '+fmt(sec.S)+' / s '+fmt(sec.s)+' cm²/m</option>';
   }).join('');
   if(cur !== '' && stList[cur]) stSel.value = cur;
 }
+// Section par mètre d'un treillis (cm²/m). Comme le tableau ADETS, la section d'un fil
+// est d'abord arrondie à 0,001 cm² (Ø6 = 0,283) : ST 20 = 1,89 et ST 15 C = 1,42.
+function secPerM(E, D){ return E>0 && D>0 ? Math.round(areaBar(D)*1000)/1000 * 1000/E : 0; }
+// S sens porteur, s sens de répartition
+function stSection(r){ return { S: secPerM(r[1], r[2]), s: secPerM(r[3], r[4]) }; }
+var normST = function(n){ return String(n).toUpperCase().replace(/[^A-Z0-9]/g,''); };
+function findST(name){ var k = normST(name); for(var i=0;i<stList.length;i++) if(normST(stList[i][0])===k) return stList[i]; return null; }
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 function loadST(){
   var r = stList[stSel.value];
@@ -476,7 +506,7 @@ function partsText(p){ return p.map(function(x){ return x[0]+' HA'+x[1]; }).join
 
 function dirBlock(title, E, D, diams, minBars, allowMix){
   if(!(E>0 && D>0)) return '';
-  var target = areaBar(D) * 1000 / E;
+  var target = secPerM(E, D);
   var h = '<div class="out-dir"><h3>'+title+'</h3><div class="tgt">ST : Ø'+String(D).replace('.',',')+' tous les '+E+' mm → <b>'+fmt(target)+' cm²/m</b></div>';
   if(!diams.length) return h + '<div class="warn">Sélectionnez au moins un diamètre.</div></div>';
   var sols = solve(target, diams, minBars, allowMix), b = sols[0];
@@ -495,8 +525,14 @@ function computeST(){
   var diams = allowed.slice().sort(function(a,b){ return a-b; }), mix = mixSel.value==='1';
   var html = dirBlock('Sens porteur', +fld.eL.value, +fld.dL.value, diams, minBars, mix)
            + dirBlock('Sens de répartition', +fld.eT.value, +fld.dT.value, diams, minBars, mix);
+  var S = secPerM(+fld.eL.value, +fld.dL.value), s2 = secPerM(+fld.eT.value, +fld.dT.value),
+      nm = stList[stSel.value] ? escapeHtml(stList[stSel.value][0]) : 'Saisie manuelle';
+  document.getElementById('stInfo').innerHTML = (S||s2) ?
+      '<div><small>'+nm+' · S porteur</small><b>'+fmt(S)+'</b> cm²/m</div>'
+    + '<div><small>'+nm+' · s répartition</small><b>'+fmt(s2)+'</b> cm²/m</div>'
+    + '<div class="tot">Masse d\'acier ≈ '+fmt((S+s2)*0.785,3)+' kg/m² (hors abouts)</div>' : '';
   stOut.innerHTML = html || '<div class="warn">Choisissez un ST ou saisissez E et D.</div>';
-  store.set('ssc-stform', {sel:stSel.value, eL:fld.eL.value, dL:fld.dL.value, eT:fld.eT.value, dT:fld.dT.value, em:espMax.value, mix:mixSel.value});
+  store.set('ssc-stform2', {sel:stSel.value, eL:fld.eL.value, dL:fld.dL.value, eT:fld.eT.value, dT:fld.dT.value, em:espMax.value, mix:mixSel.value});
 }
 
 /* Tableau ST éditable */
@@ -517,7 +553,7 @@ function renderSTTable(){
     td.appendChild(x); tr.appendChild(td); stBody.appendChild(tr);
   });
 }
-function saveST(){ store.set('ssc-st', stList); fillSelect(); if(stList[stSel.value]) loadST(); }
+function saveST(){ store.set('ssc-st-adets', stList); fillSelect(); if(stList[stSel.value]) loadST(); }
 document.getElementById('stAdd').onclick = function(){ stList.push(['ST ?',150,7,300,7]); saveST(); renderSTTable(); };
 document.getElementById('stReset').onclick = function(){
   if(!confirm('Remplacer le tableau par les valeurs par défaut ?')) return;
@@ -541,12 +577,13 @@ stSel.onchange = loadST;
 espMax.oninput = computeST; mixSel.onchange = computeST;
 
 chips(); fillSelect(); renderSTTable();
-var f = store.get('ssc-stform', null);
+var f = store.get('ssc-stform2', null);
 if(f){
   stSel.value = stList[f.sel] ? f.sel : '';
   fld.eL.value=f.eL; fld.dL.value=f.dL; fld.eT.value=f.eT; fld.dT.value=f.dT; espMax.value=f.em||''; mixSel.value=f.mix||'1';
   computeST();
-} else { stSel.value = '6'; loadST(); }
+} else { stSel.value = '2'; loadST(); }
+compute();
 })();
 </script>
 </body>
