@@ -79,6 +79,8 @@ select,input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1p
 .stinfo small{display:block;font-size:11px;opacity:.85}
 .stinfo b{font-size:20px;font-variant-numeric:tabular-nums}
 .stinfo .tot{grid-column:1/-1;background:transparent;color:var(--mute);padding:0 2px;font-size:12px}
+.addd{display:inline-flex;gap:4px;align-items:center}
+.addd input{width:64px;padding:5px 8px;border-radius:999px}
 .out-dir{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
 .out-dir h3{margin:0 0 2px;font-size:14px}
 .out-dir .tgt{color:var(--mute);font-size:13px;margin-bottom:8px}
@@ -432,7 +434,15 @@ var ST_DEFAULT = [
   ['PAF 10',  200, 5.5, 200, 5.5]
 ];
 var stList = store.get('ssc-st-adets', null) || ST_DEFAULT.map(function(r){ return r.slice(); });
-var DIAMS = [5, 6, 8, 10, 12, 14, 16, 20];
+// 4,5 / 5,5 / 7 / 9 : diamètres des fils de treillis (équivalence exacte possible)
+var DIAMS_BASE = [4.5, 5, 5.5, 6, 7, 8, 9, 10, 12, 14, 16, 20];
+var extraDiams = store.get('ssc-diams-extra', []);
+var DIAMS;
+function buildDiams(){ DIAMS = DIAMS_BASE.concat(extraDiams.filter(function(d){ return DIAMS_BASE.indexOf(d)<0; })).sort(function(a,b){ return a-b; }); }
+buildDiams();
+var dstr = function(d){ return String(d).replace('.', ','); };
+// Section d'une barre arrondie à 0,001 cm², comme le tableau ADETS
+var areaR = function(d){ return Math.round(areaBar(d)*1000)/1000; };
 var allowed = store.get('ssc-diams', [6, 8]);
 
 var stSel = document.getElementById('stSel'), stOut = document.getElementById('stOut');
@@ -463,24 +473,38 @@ function loadST(){
 function chips(){
   var box = document.getElementById('diamChips');
   box.innerHTML = DIAMS.map(function(d){
-    return '<label><input type="checkbox" value="'+d+'"'+(allowed.indexOf(d)>=0?' checked':'')+'> HA'+d+'</label>';
-  }).join('');
-  box.onchange = function(){
-    allowed = Array.prototype.map.call(box.querySelectorAll('input:checked'), function(i){ return +i.value; });
+    return '<label><input type="checkbox" value="'+d+'"'+(allowed.indexOf(d)>=0?' checked':'')+'> HA'+dstr(d)+'</label>';
+  }).join('') + '<span class="addd"><input id="dNew" type="number" min="3" max="50" step="0.5" placeholder="Ø…"><button class="icon-btn" id="dAdd" type="button">+</button></span>';
+  var add = function(){
+    var d = parseFloat(String(document.getElementById('dNew').value).replace(',', '.'));
+    if(!(d >= 3 && d <= 50)) return;
+    d = Math.round(d*10)/10;
+    if(DIAMS.indexOf(d) < 0){ extraDiams.push(d); store.set('ssc-diams-extra', extraDiams); buildDiams(); }
+    if(allowed.indexOf(d) < 0){ allowed.push(d); store.set('ssc-diams', allowed); }
+    chips(); computeST();
+  };
+  document.getElementById('dAdd').onclick = add;
+  document.getElementById('dNew').onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); add(); } };
+  box.onchange = function(e){
+    if(e.target.id==='dNew') return;
+    allowed = Array.prototype.map.call(box.querySelectorAll('input[type=checkbox]:checked'), function(i){ return +i.value; });
     store.set('ssc-diams', allowed); computeST();
   };
 }
 
 // Solutions pour 1 m : n barres de Ø, ou n1 Ø1 + n2 Ø2
-function solve(target, diams, minBars, allowMix){
+function solve(target, diams, minBars, allowMix, E, D){
   var sols = [];
+  // Même diamètre que le fil du treillis : équivalence exacte au même espacement
+  if(diams.indexOf(D) >= 0 && 1000/E >= minBars - 1e-9 && Math.abs(1000/E - Math.round(1000/E)) > 1e-9)
+    sols.push({parts:[[1000/E, D]], n:1000/E, A:target, exact:true, E:E});
   diams.forEach(function(d){
-    var a = areaBar(d), n = Math.max(Math.ceil(target/a - 1e-9), minBars, 1);
+    var a = areaR(d), n = Math.max(Math.ceil(target/a - 1e-9), minBars, 1);
     sols.push({parts:[[n,d]], n:n, A:n*a});
   });
   if(allowMix && diams.length > 1){
     for(var i=0;i<diams.length;i++) for(var j=i+1;j<diams.length;j++){
-      var d1=diams[i], d2=diams[j], a1=areaBar(d1), a2=areaBar(d2);
+      var d1=diams[i], d2=diams[j], a1=areaR(d1), a2=areaR(d2);
       // Mélange alterné uniquement (écart d'au plus 1 barre entre les deux diamètres)
       for(var n1=1;n1<=40;n1++) for(var k=-1;k<=1;k++){
         var n2 = n1+k; if(n2 < 1 || n1+n2 < minBars) continue;
@@ -490,9 +514,9 @@ function solve(target, diams, minBars, allowMix){
     }
   }
   // Tri : moins de surplus, puis moins de barres
-  sols.sort(function(x,y){ var dx = x.A-y.A; return Math.abs(dx) > 0.005 ? dx : x.n-y.n; });
+  sols.sort(function(x,y){ if(x.exact !== y.exact) return x.exact ? -1 : 1; var dx = x.A-y.A; return Math.abs(dx) > 0.005 ? dx : x.n-y.n; });
   // Une solution mixte n'est retenue que si elle bat toutes les solutions simples
-  var bestSingle = sols.filter(function(s){ return !s.mix; })[0];
+  var bestSingle = sols.filter(function(s){ return !s.mix && !s.exact; })[0];
   var seen = {};
   return sols.filter(function(s){
     if(!s.mix) return true;
@@ -501,19 +525,22 @@ function solve(target, diams, minBars, allowMix){
     return (seen[key] = true);
   }).slice(0, 5);
 }
-function partsText(p){ return p.map(function(x){ return x[0]+' HA'+x[1]; }).join(' + '); }
+function partsText(p){ return p.map(function(x){ return (x[0] % 1 ? fmt(x[0]) : x[0])+' HA'+dstr(x[1]); }).join(' + '); }
+function solText(s){ return s.exact ? 'HA'+dstr(s.parts[0][1])+' tous les '+fmt(s.E/10,1).replace(/,0$/,'')+' cm' : partsText(s.parts)+' / m'; }
+function surplus(s, target){ var x = (s.A/target-1)*100; return Math.abs(x) < 0.05 ? 'exact' : '+'+fmt(x,0)+' %'; }
 
 function dirBlock(title, E, D, diams, minBars, allowMix){
   if(!(E>0 && D>0)) return '';
   var target = secPerM(E, D);
   var h = '<div class="out-dir"><h3>'+title+'</h3><div class="tgt">ST : Ø'+String(D).replace('.',',')+' tous les '+E+' mm → <b>'+fmt(target)+' cm²/m</b></div>';
   if(!diams.length) return h + '<div class="warn">Sélectionnez au moins un diamètre.</div></div>';
-  var sols = solve(target, diams, minBars, allowMix), b = sols[0];
-  h += '<div class="best"><b>'+partsText(b.parts)+' / m</b><span>'+fmt(b.A)+' cm²/m (+'+fmt((b.A/target-1)*100,0)+' %) · espacement ≈ '+fmt(100/b.n,1)+' cm'+(b.mix?' · en alternant les diamètres':'')+'</span></div>';
+  var sols = solve(target, diams, minBars, allowMix, E, D), b = sols[0];
+  h += '<div class="best"><b>'+solText(b)+'</b><span>'+fmt(b.A)+' cm²/m ('+surplus(b,target)+') · '
+     + (b.exact ? 'soit '+fmt(b.n)+' barres/m' : 'espacement ≈ '+fmt(100/b.n,1)+' cm') + (b.mix?' · en alternant les diamètres':'')+'</span></div>';
   if(sols.length > 1){
     h += '<table class="alt"><tr><th>Autres choix / m</th><th>cm²/m</th><th>Surplus</th><th>Esp.</th></tr>';
     sols.slice(1).forEach(function(s){
-      h += '<tr><td>'+partsText(s.parts)+'</td><td>'+fmt(s.A)+'</td><td>+'+fmt((s.A/target-1)*100,0)+' %</td><td>'+fmt(100/s.n,1)+' cm</td></tr>';
+      h += '<tr><td>'+partsText(s.parts)+'</td><td>'+fmt(s.A)+'</td><td>'+surplus(s,target)+'</td><td>'+fmt(100/s.n,1)+' cm</td></tr>';
     });
     h += '</table>';
   }
