@@ -84,7 +84,17 @@ select,input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1p
 .out-dir{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
 .out-dir h3{margin:0 0 2px;font-size:14px}
 .out-dir .tgt{color:var(--mute);font-size:13px;margin-bottom:8px}
-.best{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.best{--h:140;background:hsl(var(--h) 70% 91%);color:hsl(var(--h) 75% 26%);border-left:4px solid hsl(var(--h) 70% 45%);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.ec{--h:140;color:hsl(var(--h) 75% 36%);font-weight:600}
+.scale{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--mute)}
+.scale i{flex:1;height:6px;border-radius:3px;background:linear-gradient(90deg,hsl(140 70% 45%),hsl(30 85% 50%))}
+.scale i+span+i{flex:.5;background:linear-gradient(90deg,hsl(30 85% 50%),hsl(0 75% 50%))}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .best{background:hsl(var(--h) 45% 17%);color:hsl(var(--h) 70% 72%)}
+  :root:not([data-theme="light"]) .ec{color:hsl(var(--h) 70% 65%)}
+}
+:root[data-theme="dark"] .best{background:hsl(var(--h) 45% 17%);color:hsl(var(--h) 70% 72%)}
+:root[data-theme="dark"] .ec{color:hsl(var(--h) 70% 65%)}
 .best b{font-size:20px;display:block;color:var(--ink)}
 .best span{font-size:13px}
 .alt{width:100%;border-collapse:collapse;font-size:13px}
@@ -493,54 +503,52 @@ function chips(){
 }
 
 // Solutions pour 1 m : n barres de Ø, ou n1 Ø1 + n2 Ø2
-function solve(target, diams, minBars, allowMix, E, D){
-  var sols = [];
-  // Même diamètre que le fil du treillis : équivalence exacte au même espacement
-  if(diams.indexOf(D) >= 0 && 1000/E >= minBars - 1e-9 && Math.abs(1000/E - Math.round(1000/E)) > 1e-9)
-    sols.push({parts:[[1000/E, D]], n:1000/E, A:target, exact:true, E:E});
+// Nombre entier de barres par mètre, arrondi au plus proche (écart possible en + ou en −)
+function solve(target, diams, minBars, allowMix){
+  var sols = [], err = function(A){ return Math.abs(A-target); };
   diams.forEach(function(d){
-    var a = areaR(d), n = Math.max(Math.ceil(target/a - 1e-9), minBars, 1);
+    var a = areaR(d), n = Math.max(Math.round(target/a), minBars, 1);
     sols.push({parts:[[n,d]], n:n, A:n*a});
   });
   if(allowMix && diams.length > 1){
     for(var i=0;i<diams.length;i++) for(var j=i+1;j<diams.length;j++){
-      var d1=diams[i], d2=diams[j], a1=areaR(d1), a2=areaR(d2);
+      var d1=diams[i], d2=diams[j], a1=areaR(d1), a2=areaR(d2), best=null;
       // Mélange alterné uniquement (écart d'au plus 1 barre entre les deux diamètres)
       for(var n1=1;n1<=40;n1++) for(var k=-1;k<=1;k++){
         var n2 = n1+k; if(n2 < 1 || n1+n2 < minBars) continue;
         var A = n1*a1+n2*a2;
-        if(A >= target - 1e-9) sols.push({parts:[[n1,d1],[n2,d2]], n:n1+n2, A:A, mix:true});
+        if(!best || err(A) < err(best.A) - 1e-9) best = {parts:[[n1,d1],[n2,d2]], n:n1+n2, A:A, mix:true};
       }
+      if(best) sols.push(best);
     }
   }
-  // Tri : moins de surplus, puis moins de barres
-  sols.sort(function(x,y){ if(x.exact !== y.exact) return x.exact ? -1 : 1; var dx = x.A-y.A; return Math.abs(dx) > 0.005 ? dx : x.n-y.n; });
-  // Une solution mixte n'est retenue que si elle bat toutes les solutions simples
-  var bestSingle = sols.filter(function(s){ return !s.mix && !s.exact; })[0];
-  var seen = {};
-  return sols.filter(function(s){
-    if(!s.mix) return true;
-    var key = s.parts[0][1]+'-'+s.parts[1][1];
-    if(seen[key] || s.A >= bestSingle.A - 0.005) return false;
-    return (seen[key] = true);
-  }).slice(0, 5);
+  // Tri : plus petit écart, puis moins de barres
+  sols.sort(function(x,y){ var dx = err(x.A)-err(y.A); return Math.abs(dx) > 0.005 ? dx : x.n-y.n; });
+  // Une solution mixte n'est retenue que si elle réduit l'écart d'au moins 2 points
+  var bestSingle = sols.filter(function(s){ return !s.mix; })[0];
+  return sols.filter(function(s){ return !s.mix || err(s.A) < err(bestSingle.A) - 0.02*target; }).slice(0, 5);
 }
-function partsText(p){ return p.map(function(x){ return (x[0] % 1 ? fmt(x[0]) : x[0])+' HA'+dstr(x[1]); }).join(' + '); }
-function solText(s){ return s.exact ? 'HA'+dstr(s.parts[0][1])+' tous les '+fmt(s.E/10,1).replace(/,0$/,'')+' cm' : partsText(s.parts)+' / m'; }
-function surplus(s, target){ var x = (s.A/target-1)*100; return Math.abs(x) < 0.05 ? 'exact' : '+'+fmt(x,0)+' %'; }
+function partsText(p){ return p.map(function(x){ return x[0]+' HA'+dstr(x[1]); }).join(' + '); }
+function pct(s, target){ return (s.A/target-1)*100; }
+function ecart(s, target){ var x = pct(s, target); return Math.abs(x) < 0.05 ? 'exact' : (x > 0 ? '+' : '−')+fmt(Math.abs(x), Math.abs(x) < 10 ? 1 : 0)+' %'; }
+// Teinte selon l'écart : vert à 0 %, orange à 10 %, rouge à 15 % et au-delà
+function hue(s, target){
+  var x = Math.abs(pct(s, target));
+  return Math.round(x <= 10 ? 140 - 110*x/10 : Math.max(0, 30 - 30*(x-10)/5));
+}
 
 function dirBlock(title, E, D, diams, minBars, allowMix){
   if(!(E>0 && D>0)) return '';
   var target = secPerM(E, D);
   var h = '<div class="out-dir"><h3>'+title+'</h3><div class="tgt">ST : Ø'+String(D).replace('.',',')+' tous les '+E+' mm → <b>'+fmt(target)+' cm²/m</b></div>';
   if(!diams.length) return h + '<div class="warn">Sélectionnez au moins un diamètre.</div></div>';
-  var sols = solve(target, diams, minBars, allowMix, E, D), b = sols[0];
-  h += '<div class="best"><b>'+solText(b)+'</b><span>'+fmt(b.A)+' cm²/m ('+surplus(b,target)+') · '
-     + (b.exact ? 'soit '+fmt(b.n)+' barres/m' : 'espacement ≈ '+fmt(100/b.n,1)+' cm') + (b.mix?' · en alternant les diamètres':'')+'</span></div>';
+  var sols = solve(target, diams, minBars, allowMix), b = sols[0];
+  h += '<div class="best" style="--h:'+hue(b,target)+'"><b>'+partsText(b.parts)+' / m</b><span>'+fmt(b.A)+' cm²/m ('+ecart(b,target)+') · espacement ≈ '
+     + fmt(100/b.n,1)+' cm'+(b.mix?' · en alternant les diamètres':'')+'</span></div>';
   if(sols.length > 1){
-    h += '<table class="alt"><tr><th>Autres choix / m</th><th>cm²/m</th><th>Surplus</th><th>Esp.</th></tr>';
+    h += '<table class="alt"><tr><th>Autres choix / m</th><th>cm²/m</th><th>Écart</th><th>Esp.</th></tr>';
     sols.slice(1).forEach(function(s){
-      h += '<tr><td>'+partsText(s.parts)+'</td><td>'+fmt(s.A)+'</td><td>'+surplus(s,target)+'</td><td>'+fmt(100/s.n,1)+' cm</td></tr>';
+      h += '<tr><td>'+partsText(s.parts)+'</td><td>'+fmt(s.A)+'</td><td class="ec" style="--h:'+hue(s,target)+'">'+ecart(s,target)+'</td><td>'+fmt(100/s.n,1)+' cm</td></tr>';
     });
     h += '</table>';
   }
@@ -557,6 +565,7 @@ function computeST(){
       '<div><small>'+nm+' · S porteur</small><b>'+fmt(S)+'</b> cm²/m</div>'
     + '<div><small>'+nm+' · s répartition</small><b>'+fmt(s2)+'</b> cm²/m</div>'
     + '<div class="tot">Masse d\'acier ≈ '+fmt((S+s2)*0.785,3)+' kg/m² (hors abouts)</div>' : '';
+  if(html) html += '<div class="scale"><span>0 %</span><i></i><span>10 %</span><i></i><span>≥ 15 %</span></div>';
   stOut.innerHTML = html || '<div class="warn">Choisissez un ST ou saisissez E et D.</div>';
   store.set('ssc-stform2', {sel:stSel.value, eL:fld.eL.value, dL:fld.dL.value, eT:fld.eT.value, dT:fld.dT.value, em:espMax.value, mix:mixSel.value});
 }
